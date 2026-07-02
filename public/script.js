@@ -191,6 +191,92 @@ function tryCentralAtomHeuristic(counts){
 }
 
 /* ---------------------------------------------------------------
+   3b. GENERAL CHAIN VSEPR HEURISTIC
+   Used when tryCentralAtomHeuristic can't find a single unique center
+   (e.g. N2H4, C2H6, S2Cl2 — two or more heavy atoms with no obvious
+   single hub). Chains together only the "skeleton-capable" heavy atoms
+   (typical valence >= 2, e.g. C/N/O/P/S), since valence-1 atoms like
+   halogens can only ever have one neighbour and must sit at the ends as
+   ligands, not be chained to each other. Hydrogens and other valence-1
+   ligands are then distributed across the chain in valence-capacity
+   order (so e.g. propane's middle carbon gets 2 H's, not 3, like its
+   end carbons), and chain bond orders are upgraded (single -> double ->
+   triple) to satisfy any remaining valence deficit — the same "spend
+   the deficit on bond order, not invented atoms" approach as the
+   central-atom case.
+--------------------------------------------------------------- */
+function tryChainHeuristic(counts){
+  const nonH = Object.keys(counts).filter(e => e !== 'H');
+
+  const skeletonEls = [];
+  const terminalEls = [];
+  nonH.forEach(e => {
+    const v = TYPICAL_VALENCE[e] ?? 1;
+    for (let k=0;k<counts[e];k++){
+      (v >= 2 ? skeletonEls : terminalEls).push(e);
+    }
+  });
+  if (skeletonEls.length < 2) return null; // no multi-atom skeleton to chain
+
+  // Higher typical valence first, so more-connected atoms land toward the
+  // middle of the chain rather than the ends.
+  skeletonEls.sort((a,b) => (TYPICAL_VALENCE[b] ?? 1) - (TYPICAL_VALENCE[a] ?? 1));
+  const chainLen = skeletonEls.length;
+
+  const atoms = skeletonEls.map(el => ({ element: el, aromatic:false, charge:0, numH:0 }));
+  const bonds = [];
+  for (let i=0; i<chainLen-1; i++){
+    bonds.push({ a:i, b:i+1, order:1, aromatic:false });
+  }
+
+  const usedValence = new Array(chainLen).fill(0);
+  bonds.forEach(b => { usedValence[b.a]++; usedValence[b.b]++; });
+
+  // Attach every terminal-only heavy atom (halogens), then every hydrogen,
+  // to whichever skeleton atom next has valence room (round-robin, skipping
+  // atoms already at capacity).
+  const ligands = terminalEls.concat(new Array(counts['H'] || 0).fill('H'));
+  let ptr = 0;
+  ligands.forEach(el => {
+    let idx = -1;
+    for (let guard=0; guard<chainLen; guard++){
+      const candidate = ptr % chainLen;
+      ptr++;
+      if (usedValence[candidate] < (TYPICAL_VALENCE[skeletonEls[candidate]] ?? 4)){ idx = candidate; break; }
+    }
+    if (idx === -1) idx = (ptr - 1) % chainLen; // everyone's full — place anyway rather than drop the atom
+    atoms.push({ element: el, aromatic:false, charge:0, numH:0, isH: el==='H' });
+    bonds.push({ a: idx, b: atoms.length-1, order:1, aromatic:false });
+    usedValence[idx]++;
+  });
+
+  // Upgrade chain (skeleton-skeleton) bond orders to satisfy any remaining
+  // valence deficit, only where both endpoints still have room.
+  let guardCounter = 0, upgraded = true;
+  while (upgraded && guardCounter < 30){
+    guardCounter++;
+    upgraded = false;
+    for (let i=0; i<chainLen; i++){
+      const cap = TYPICAL_VALENCE[skeletonEls[i]] ?? 4;
+      if (usedValence[i] >= cap) continue;
+      const bd = bonds.find(b =>
+        b.a < chainLen && b.b < chainLen && (b.a === i || b.b === i) && b.order < 3 &&
+        usedValence[b.a] < (TYPICAL_VALENCE[skeletonEls[b.a]] ?? 4) &&
+        usedValence[b.b] < (TYPICAL_VALENCE[skeletonEls[b.b]] ?? 4)
+      );
+      if (bd){
+        bd.order += 1;
+        usedValence[bd.a] += 1;
+        usedValence[bd.b] += 1;
+        upgraded = true;
+      }
+    }
+  }
+
+  return { atoms, bonds };
+}
+
+/* ---------------------------------------------------------------
    4. MINI SMILES PARSER (for library entries)
 --------------------------------------------------------------- */
 const SMILES_ELEMENTS = ["Cl","Br","B","C","N","O","P","S","F","I"];
@@ -756,15 +842,8 @@ async function run(){
       return;
     }
 
-    // not in library -> try central-atom heuristic
-    const heuristicMol = tryCentralAtomHeuristic(counts);
-    if (heuristicMol){
-      buildAndShow(heuristicMol, `No exact match in the compound library — structure estimated from valence rules for ${canon}.`);
-      return;
-    }
-
-    // still nothing locally -> fall back to an internet lookup (PubChem),
-    // and cache any hit into the shared library for next time.
+    // Not in the local library -> check PubChem for the real structure
+    // before falling back to our own VSEPR/valence-rule guesses.
     errEl.textContent = `"${canon}" isn't in the local library — checking PubChem...`;
     const webMatches = await lookupOnline(canon);
     if (webMatches.length > 0){
@@ -777,11 +856,29 @@ async function run(){
       }
       return;
     }
+    errEl.textContent = '';
+
+    // Not on PubChem either -> fall back to our own VSEPR/valence-rule
+    // structural estimate. Try a single unique central atom first (precise
+    // when it applies, e.g. CO2, NH3, SF6), but don't stop there — if there's
+    // no unique center, build a general multi-atom chain instead (e.g. N2H4,
+    // C2H6, S2Cl2) rather than giving up.
+    const heuristicMol = tryCentralAtomHeuristic(counts);
+    if (heuristicMol){
+      buildAndShow(heuristicMol, `No match in the library or on PubChem — structure estimated from VSEPR/valence rules (single-center) for ${canon}.`);
+      return;
+    }
+
+    const chainMol = tryChainHeuristic(counts);
+    if (chainMol){
+      buildAndShow(chainMol, `No match in the library or on PubChem — structure estimated from VSEPR/valence rules (chain) for ${canon}.`);
+      return;
+    }
 
     throw new Error(
-      `"${canon}" isn't in the built-in compound library, doesn't have a unique central-atom ` +
-      `structure, and no match was found on PubChem either. Try a SMILES-capable lookup, or ` +
-      `pick a known compound from the presets.`
+      `"${canon}" isn't in the built-in compound library, wasn't found on PubChem, and doesn't fit ` +
+      `a central-atom or chain structure that VSEPR/valence rules can resolve. Try a SMILES-capable ` +
+      `lookup, or pick a known compound from the presets.`
     );
 
   } catch(e){
