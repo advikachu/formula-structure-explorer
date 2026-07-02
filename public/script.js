@@ -122,7 +122,7 @@ async function loadUserLibrary(){
     const res = await fetch('/api/library');
     if (!res.ok) return;
     const data = await res.json();
-    USER_LIBRARY = data.map(e => ({ ...e, canon: canonicalFormula(parseFormula(e.formula)), source: 'community' }));
+    USER_LIBRARY = data.map(e => ({ ...e, canon: canonicalFormula(parseFormula(e.formula)), source: e.source === 'pubchem' ? 'pubchem' : 'community' }));
     renderContribTable();
   } catch(e){
     // server not available (e.g. opened as a plain static file) - silently skip
@@ -666,13 +666,75 @@ function buildAndShow(mol, label){
     `;
     tbody.appendChild(tr);
   });
+  // A null label means the caller (e.g. the isomer picker) already populated
+  // isomerNote itself and is just asking us to render the default structure —
+  // don't wipe out what it just built.
   if (label) document.getElementById('isomerNote').textContent = label;
-  else document.getElementById('isomerNote').textContent = '';
 
   document.getElementById('explainWrap').innerHTML = generateExplanations(results);
 }
 
-function run(){
+function showSingleMatch(match, note){
+  const mol = parseSmiles(match.smiles);
+  buildAndShow(mol, note);
+}
+
+function showIsomerPicker(matches, canon, introHtml){
+  const note = document.getElementById('isomerNote');
+  note.innerHTML = introHtml;
+  matches.forEach(m=>{
+    const btn = document.createElement('button');
+    btn.className = 'secondary isomerBtn';
+    btn.textContent = m.name;
+    btn.onclick = ()=>{
+      const mol = parseSmiles(m.smiles);
+      buildAndShow(mol, `Showing ${m.name} (${canon}).`);
+    };
+    note.appendChild(btn);
+  });
+  // show the first one by default
+  const mol = parseSmiles(matches[0].smiles);
+  buildAndShow(mol, null);
+}
+
+// Ask the server (which proxies PubChem) for compounds matching this
+// canonical formula. Returns [] on any failure (offline, PubChem down, no hit).
+async function lookupOnline(canon){
+  try {
+    const res = await fetch('/api/lookup/' + encodeURIComponent(canon));
+    if (!res.ok) return [];
+    const data = await res.json();
+    const compounds = (data.compounds || []).map(c => ({ name: c.name, smiles: c.smiles }));
+    // PubChem's formula search also returns isotopologues (deuterated,
+    // tritiated, etc.) that share the same connectivity SMILES as the
+    // parent compound — collapse those down to one entry.
+    const seenSmiles = new Set();
+    return compounds.filter(c => {
+      if (seenSmiles.has(c.smiles)) return false;
+      seenSmiles.add(c.smiles);
+      return true;
+    });
+  } catch(e){
+    return [];
+  }
+}
+
+// Persist newly-discovered compounds into the shared library so future
+// lookups for this formula resolve locally instead of hitting PubChem again.
+async function cacheWebMatches(matches, canon){
+  for (const m of matches){
+    try {
+      await fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: m.name, formula: canon, smiles: m.smiles, source: 'pubchem' })
+      });
+    } catch(e){ /* best-effort cache; a failed save just means we ask PubChem again next time */ }
+  }
+  await loadUserLibrary();
+}
+
+async function run(){
   const errEl = document.getElementById('err');
   errEl.textContent = '';
   document.getElementById('isomerNote').textContent = '';
@@ -685,27 +747,12 @@ function run(){
     const matches = findInLibrary(canon);
 
     if (matches.length === 1){
-      const mol = parseSmiles(matches[0].smiles);
-      buildAndShow(mol, `Recognized as ${matches[0].name} (${canon}).`);
+      showSingleMatch(matches[0], `Recognized as ${matches[0].name} (${canon}).`);
       return;
     }
 
     if (matches.length > 1){
-      const note = document.getElementById('isomerNote');
-      note.innerHTML = `Multiple known compounds share the formula <strong>${canon}</strong> (structural isomers). Pick one: `;
-      matches.forEach(m=>{
-        const btn = document.createElement('button');
-        btn.className = 'secondary isomerBtn';
-        btn.textContent = m.name;
-        btn.onclick = ()=>{
-          const mol = parseSmiles(m.smiles);
-          buildAndShow(mol, `Showing ${m.name} (${canon}).`);
-        };
-        note.appendChild(btn);
-      });
-      // show the first one by default
-      const mol = parseSmiles(matches[0].smiles);
-      buildAndShow(mol, null);
+      showIsomerPicker(matches, canon, `Multiple known compounds share the formula <strong>${canon}</strong> (structural isomers). Pick one: `);
       return;
     }
 
@@ -716,10 +763,25 @@ function run(){
       return;
     }
 
+    // still nothing locally -> fall back to an internet lookup (PubChem),
+    // and cache any hit into the shared library for next time.
+    errEl.textContent = `"${canon}" isn't in the local library — checking PubChem...`;
+    const webMatches = await lookupOnline(canon);
+    if (webMatches.length > 0){
+      errEl.textContent = '';
+      await cacheWebMatches(webMatches, canon);
+      if (webMatches.length === 1){
+        showSingleMatch(webMatches[0], `Not in the local library — found "${webMatches[0].name}" (${canon}) via PubChem and cached for next time.`);
+      } else {
+        showIsomerPicker(webMatches, canon, `Not in the local library — PubChem found multiple compounds matching <strong>${canon}</strong> (now cached for next time). Pick one: `);
+      }
+      return;
+    }
+
     throw new Error(
-      `"${canon}" isn't in the built-in compound library, and it has more than one possible ` +
-      `heavy-atom arrangement, so a unique structure can't be inferred from the formula alone. ` +
-      `Try a SMILES-capable lookup, or pick a known compound from the presets.`
+      `"${canon}" isn't in the built-in compound library, doesn't have a unique central-atom ` +
+      `structure, and no match was found on PubChem either. Try a SMILES-capable lookup, or ` +
+      `pick a known compound from the presets.`
     );
 
   } catch(e){
@@ -779,7 +841,7 @@ function renderContribTable(){
       <td>${e.name}</td>
       <td>${e.formula}</td>
       <td style="font-family:Consolas,monospace;">${e.smiles}</td>
-      <td>${e.source === 'community' ? '🧪 community' : 'built-in'}</td>
+      <td>${e.source === 'pubchem' ? '🌐 PubChem' : e.source === 'community' ? '🧪 community' : 'built-in'}</td>
     </tr>`).join('');
 }
 
