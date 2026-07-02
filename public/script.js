@@ -531,9 +531,10 @@ function render(mol, pos, results){
       .sort((x,y) => x.a - y.a);
 
     // For each adjacent pair in the sorted ring, draw one arc + label.
-    // To avoid over-cluttering, only annotate the first two unique angle values
-    // (handles molecules like trigonal bipyramidal which have 90° and 120°).
-    const drawnLabels = new Set();
+    // When multiple bond pairs share the same ideal angle value (e.g. every
+    // ~109.5° pair in a tetrahedral center), only the first is drawn — the
+    // rest are visually redundant.
+    const drawnAngleLabels = new Set();
 
     sorted.forEach((cur, i)=>{
       const next = sorted[(i+1) % sorted.length];
@@ -546,6 +547,30 @@ function render(mol, pos, results){
       // Skip very wide gaps (>270°): they're the "back" of the arc and
       // would produce misleading large arcs on a 2D projection.
       if (span > 4.71) return; // 270° in radians
+
+      // Determine the ideal angle label for THIS specific arc span.
+      // For atoms with a single ideal angle value, use that for all arcs.
+      // For multi-angle atoms (sp3d, sp3d2), pick the closest ideal angle to the drawn span.
+      let angleLabel = idealAngleStr;
+      const spanDeg = span * 180 / Math.PI;
+      const allAngles = idealAngleStr.match(/([\d.]+)°/g);
+      if (allAngles && allAngles.length > 1){
+        let best = allAngles[0];
+        let bestDiff = Infinity;
+        allAngles.forEach(a=>{
+          const val = parseFloat(a);
+          const diff = Math.abs(val - spanDeg);
+          if (diff < bestDiff){ bestDiff = diff; best = a; }
+        });
+        angleLabel = best;
+      } else if (allAngles && allAngles.length === 1){
+        angleLabel = allAngles[0];
+      }
+
+      // Skip this arc entirely (line + label) if this ideal angle value has
+      // already been drawn once for this atom.
+      if (drawnAngleLabels.has(angleLabel)) return;
+      drawnAngleLabels.add(angleLabel);
 
       // Pick a radius that sits just outside the atom circle
       const arcR = 22;
@@ -571,32 +596,6 @@ function render(mol, pos, results){
       const lx = cx + labelR * Math.cos(midAngle);
       const ly = cy + labelR * Math.sin(midAngle);
 
-      // Determine the ideal angle label for THIS specific arc span.
-      // For atoms with a single ideal angle value, use that for all arcs.
-      // For multi-angle atoms (sp3d, sp3d2), pick 90° for narrow arcs and 120° for wider.
-      let angleLabel = idealAngleStr;
-      const spanDeg = span * 180 / Math.PI;
-      // Multi-angle cases: pick the closest ideal angle to the drawn span
-      const allAngles = idealAngleStr.match(/([\d.]+)°/g);
-      if (allAngles && allAngles.length > 1){
-        let best = allAngles[0];
-        let bestDiff = Infinity;
-        allAngles.forEach(a=>{
-          const val = parseFloat(a);
-          const diff = Math.abs(val - spanDeg);
-          if (diff < bestDiff){ bestDiff = diff; best = a; }
-        });
-        angleLabel = best;
-      } else if (allAngles && allAngles.length === 1){
-        angleLabel = allAngles[0];
-      }
-
-      // Don't repeat the same label more than twice on a single atom (for crowded molecules)
-      const labelKey = idx + '_' + angleLabel;
-      if ((drawnLabels.get ? drawnLabels.get(labelKey)||0 : 0) >= 2) return;
-      drawnLabels.set ? drawnLabels.set(labelKey,(drawnLabels.get(labelKey)||0)+1) : null;
-
-      // Use a Set-of-strings to track; replace with simple object since Set doesn't have .get
       const text = document.createElementNS(ns, "text");
       text.setAttribute("x", lx);
       text.setAttribute("y", ly + 3.5);
