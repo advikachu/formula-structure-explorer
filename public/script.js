@@ -906,11 +906,15 @@ function badgeClass(h){
   return 'sp3';
 }
 
+let lastMol = null, lastResults = null;
+
 function buildAndShow(mol, label){
   mol = addImplicitHydrogens(mol);
   const pos = layout(mol);
   const results = analyze(mol);
   render(mol, pos, results);
+  lastMol = mol;
+  lastResults = results;
   const tbody = document.querySelector('#resultTable tbody');
   tbody.innerHTML = '';
   results.forEach(r=>{
@@ -1060,6 +1064,137 @@ async function run(){
     document.getElementById('canvas').innerHTML = '';
     document.getElementById('explainWrap').innerHTML = '';
   }
+}
+
+/* ---------------------------------------------------------------
+   9b. 3D STRUCTURE VIEW
+   Generates 3D coordinates from the same idealized VSEPR geometry
+   already computed per atom (steric number -> a fixed set of
+   idealized bond directions), not a physically minimized structure —
+   consistent with the 2D diagram's own "idealized angle" labels.
+   Placement is a simple BFS: each atom's direction template is
+   rotated so one slot points back at its parent, and the remaining
+   slots go to its not-yet-placed neighbours. Ring-closing bonds (to
+   an already-placed atom) are just drawn, not used to move anything.
+   Rendered via 3Dmol.js as a MOL (V2000) block built from the same
+   atoms/bonds this app already models.
+--------------------------------------------------------------- */
+const VSEPR_DIRECTIONS = {
+  1: [[0,0,1]],
+  2: [[0,0,1],[0,0,-1]],
+  3: [[1,0,0],[-0.5,0.8660254,0],[-0.5,-0.8660254,0]],
+  4: [[1,1,1],[1,-1,-1],[-1,1,-1],[-1,-1,1]],
+  5: [[0,0,1],[0,0,-1],[1,0,0],[-0.5,0.8660254,0],[-0.5,-0.8660254,0]],
+  6: [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],
+};
+
+function vNormalize(v){
+  const len = Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) || 1;
+  return [v[0]/len, v[1]/len, v[2]/len];
+}
+function vAdd(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+function vScale(a,s){ return [a[0]*s, a[1]*s, a[2]*s]; }
+function vCross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function vDot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+
+// Returns a function that rotates any vector the same way `from` (unit) needs
+// to rotate to land on `to` (unit) — Rodrigues' rotation formula.
+function rotationAligning(from, to){
+  const f = vNormalize(from), t = vNormalize(to);
+  const c = vDot(f, t);
+  if (c > 0.9999) return (v) => v;
+  if (c < -0.9999){
+    let axis = vCross(f, [1,0,0]);
+    if (vDot(axis,axis) < 1e-6) axis = vCross(f, [0,1,0]);
+    axis = vNormalize(axis);
+    return (v) => vAdd(vScale(axis, 2*vDot(axis, v)), vScale(v, -1));
+  }
+  const axis = vNormalize(vCross(f, t));
+  const s = Math.sqrt(1 - c*c);
+  return (v) => vAdd(vAdd(vScale(v, c), vScale(vCross(axis, v), s)), vScale(axis, vDot(axis, v) * (1 - c)));
+}
+
+function layout3D(mol){
+  const { atoms, bonds } = mol;
+  const neighbours = atoms.map(() => []);
+  bonds.forEach(b => { neighbours[b.a].push(b.b); neighbours[b.b].push(b.a); });
+
+  const resultByIdx = {};
+  (lastResults || []).forEach(r => { resultByIdx[r.idx] = r; });
+
+  const pos = new Array(atoms.length).fill(null);
+  const visited = new Array(atoms.length).fill(false);
+  const BOND_LEN = 1.5;
+
+  function stericOf(idx){
+    const r = resultByIdx[idx];
+    return r ? Math.min(Math.max(r.steric, 1), 6) : 1; // terminal atoms (H, etc.) just need one slot
+  }
+
+  for (let start = 0; start < atoms.length; start++){
+    if (visited[start]) continue;
+    pos[start] = [0,0,0];
+    visited[start] = true;
+    const queue = [{ idx: start, parent: -1, inDir: [0,0,1] }];
+    while (queue.length){
+      const { idx, parent, inDir } = queue.shift();
+      const template = VSEPR_DIRECTIONS[stericOf(idx)] || VSEPR_DIRECTIONS[4];
+      const backToParent = parent === -1 ? [0,0,1] : vNormalize(vScale(inDir, -1));
+      const rotate = rotationAligning(template[0], backToParent);
+      const rotatedTemplate = template.map(rotate);
+
+      let slot = 1; // slot 0 is reserved for the bond back to the parent
+      neighbours[idx].forEach(n => {
+        if (n === parent || visited[n]) return; // already placed (ring closure) - just a bond, no new position
+        const dir = rotatedTemplate[slot] || rotatedTemplate[rotatedTemplate.length-1] || [0,0,1];
+        slot++;
+        pos[n] = vAdd(pos[idx], vScale(dir, BOND_LEN));
+        visited[n] = true;
+        queue.push({ idx: n, parent: idx, inDir: dir });
+      });
+    }
+  }
+  return pos;
+}
+
+function buildMolBlock(mol, pos){
+  const { atoms, bonds } = mol;
+  const pad = (s, n) => String(s).padStart(n);
+  const lines = ['', '  StructExpl', '', `${pad(atoms.length,3)}${pad(bonds.length,3)}  0  0  0  0  0  0  0  0999 V2000`];
+  atoms.forEach((a, i) => {
+    const p = pos[i] || [0,0,0];
+    lines.push(`${p[0].toFixed(4).padStart(10)}${p[1].toFixed(4).padStart(10)}${p[2].toFixed(4).padStart(10)} ${a.element.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
+  });
+  bonds.forEach(b => {
+    const order = Math.max(1, Math.min(3, Math.round(b.order))); // MOL V2000 has no 1.5 (aromatic) order
+    lines.push(`${pad(b.a+1,3)}${pad(b.b+1,3)}${pad(order,3)}  0`);
+  });
+  lines.push('M  END');
+  return lines.join('\n');
+}
+
+let viewer3d = null;
+
+function show3D(){
+  if (!lastMol){ return; }
+  const overlay = document.getElementById('viewer3dOverlay');
+  const container = document.getElementById('viewer3dContainer');
+  overlay.style.display = 'flex';
+  container.innerHTML = '';
+
+  const pos = layout3D(lastMol);
+  const molBlock = buildMolBlock(lastMol, pos);
+
+  viewer3d = $3Dmol.createViewer(container, { backgroundColor: '#171a21' });
+  viewer3d.addModel(molBlock, 'sdf');
+  viewer3d.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
+  viewer3d.zoomTo();
+  viewer3d.render();
+}
+
+function close3D(){
+  document.getElementById('viewer3dOverlay').style.display = 'none';
+  viewer3d = null;
 }
 
 /* ---------------------------------------------------------------

@@ -29,6 +29,9 @@
       </div>
       <div class="presets" id="presets"></div>
       <svg id="canvas" viewBox="0 0 600 380"></svg>
+      <div class="controls" style="margin:10px 0 0;">
+        <button class="secondary" onclick="show3D()">View in 3D</button>
+      </div>
       <div id="err" class="error"></div>
       <div id="isomerNote" class="note"></div>
       <div class="legend">
@@ -39,7 +42,6 @@
         <span><span class="dot" style="background:#e7a9ff"></span>P</span>
         <span><span class="dot" style="background:#9fe6ff"></span>halogen</span>
         <span><span class="dot" style="background:#e7ebf2"></span>H</span>
-        <span><svg width="18" height="12" style="vertical-align:middle"><path d="M 2 10 A 8 8 0 0 1 16 10" fill="none" stroke="#ffd166" stroke-width="1.5" stroke-dasharray="3,2"/></svg> ideal bond angle</span>
       </div>
     </div>
 
@@ -191,6 +193,22 @@
   </div>
 </div>
 
+<div id="viewer3dOverlay" class="modalOverlay" style="display:none;">
+  <div class="modalBox">
+    <div class="modalHeader">
+      <span>3D Structure</span>
+      <button class="secondary" onclick="close3D()">Close</button>
+    </div>
+    <div id="viewer3dContainer" class="viewer3dContainer"></div>
+    <div class="note" style="margin-top:8px;">
+      Drag to rotate, scroll to zoom. This geometry is built from the same idealized VSEPR bond
+      angles shown in the 2D diagram (steric number → ideal directions), not a physically
+      minimized 3D structure.
+    </div>
+  </div>
+</div>
+
+<script src="https://3Dmol.org/build/3Dmol-min.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
