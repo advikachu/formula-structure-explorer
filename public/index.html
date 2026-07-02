@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chemical Formula Structure & Hybridization Explorer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>Chemical Formula → Structure, Hybridization &amp; Bond Angles</h1>
+<div class="sub">Type a chemical formula (e.g. <code>H2O</code>, <code>CO2</code>, <code>C2H6O</code>, <code>NH3</code>, <code>C6H12O6</code>) to see an estimated structure, hybridization, and idealized bond angles.</div>
+
+<div class="tabs">
+  <button class="tabBtn active" data-tab="explorer">Structure Explorer</button>
+  <button class="tabBtn" data-tab="rules">VSEPR Rules</button>
+  <button class="tabBtn" data-tab="contribute">Add to Library</button>
+</div>
+
+<!-- ===================== TAB 1: EXPLORER ===================== -->
+<div class="tabPanel" id="tab-explorer">
+
+  <div class="layout">
+
+    <div class="card">
+      <div class="controls">
+        <input id="formula" type="text" value="H2O" placeholder="Enter a chemical formula, e.g. CO2, NH3, C6H6">
+        <button onclick="run()">Analyze</button>
+      </div>
+      <div class="presets" id="presets"></div>
+      <svg id="canvas" viewBox="0 0 600 380"></svg>
+      <div id="err" class="error"></div>
+      <div id="isomerNote" class="note"></div>
+      <div class="legend">
+        <span><span class="dot" style="background:#5cc8ff"></span>C</span>
+        <span><span class="dot" style="background:#ff7a7a"></span>O</span>
+        <span><span class="dot" style="background:#7a9bff"></span>N</span>
+        <span><span class="dot" style="background:#ffd166"></span>S</span>
+        <span><span class="dot" style="background:#e7a9ff"></span>P</span>
+        <span><span class="dot" style="background:#9fe6ff"></span>halogen</span>
+        <span><span class="dot" style="background:#e7ebf2"></span>H</span>
+        <span><svg width="18" height="12" style="vertical-align:middle"><path d="M 2 10 A 8 8 0 0 1 16 10" fill="none" stroke="#ffd166" stroke-width="1.5" stroke-dasharray="3,2"/></svg> ideal bond angle</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="panelTitle">Per-atom analysis</h2>
+      <div class="tableWrap">
+        <table id="resultTable">
+          <thead>
+            <tr><th>Atom</th><th>Bonds</th><th>Lone pairs</th><th>Steric #</th><th>Hybridization</th><th>Ideal geometry / angle(s)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="note">
+        A chemical formula alone does not uniquely determine structure — different arrangements of
+        the same atoms (structural isomers) can share a formula. This tool checks a compound library
+        (built-in + community-submitted, see the "Add to Library" tab) first; if several known
+        compounds match, you'll be asked to pick one. For simple formulas with a single central atom
+        (like CO2, NH3, SF6) it derives a structure automatically using standard valence rules. Lone
+        pairs &amp; hybridization come from a simplified VSEPR model and may not be exact for charged,
+        hypervalent, or highly delocalized species.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card" style="margin-top:18px;">
+    <h2 class="panelTitle">Why this structure? (atom-by-atom explanation)</h2>
+    <div id="explainWrap"></div>
+  </div>
+
+</div>
+
+<!-- ===================== TAB 2: VSEPR RULES ===================== -->
+<div class="tabPanel" id="tab-rules" style="display:none;">
+  <div class="card">
+    <h2 class="panelTitle">What VSEPR theory says</h2>
+    <div class="rulesBody">
+      <p><strong>Valence Shell Electron Pair Repulsion (VSEPR) theory</strong> starts from one idea:
+      electron pairs around a central atom — whether they're in bonds or sitting as lone pairs —
+      repel each other, so they arrange themselves in 3D to get as far apart as possible. The shape
+      that results is what we call the molecular geometry.</p>
+
+      <h3>Step 1 — Count electron domains (steric number)</h3>
+      <p>An "electron domain" is anything occupying space around the central atom: a single bond, a
+      double bond, a triple bond (each still counts as <em>one</em> domain — multiple bonds don't add
+      extra repelling groups, they just act as one fat domain), or a lone pair.</p>
+      <p class="formula-block">Steric number = (number of atoms bonded to the central atom) + (number of lone pairs on the central atom)</p>
+
+      <h3>Step 2 — Electron-domain geometry vs. molecular geometry</h3>
+      <p>The <em>electron-domain geometry</em> is the arrangement of all domains, including lone pairs.
+      The <em>molecular geometry</em> only describes where the atoms are — lone pairs are invisible in
+      the final shape, but they still push the visible atoms around, which is why water (steric number 4,
+      2 lone pairs) is bent rather than tetrahedral-looking.</p>
+
+      <h3>Step 3 — The standard table</h3>
+      <table class="rulesTable">
+        <thead><tr><th>Steric #</th><th>Hybridization</th><th>Electron-domain geometry</th><th>Ideal angle(s)</th></tr></thead>
+        <tbody>
+          <tr><td>2</td><td>sp</td><td>Linear</td><td>180°</td></tr>
+          <tr><td>3</td><td>sp²</td><td>Trigonal planar</td><td>120°</td></tr>
+          <tr><td>4</td><td>sp³</td><td>Tetrahedral</td><td>109.5°</td></tr>
+          <tr><td>5</td><td>sp³d</td><td>Trigonal bipyramidal</td><td>90° (axial-equatorial), 120° (equatorial-equatorial), 180° (axial-axial)</td></tr>
+          <tr><td>6</td><td>sp³d²</td><td>Octahedral</td><td>90° (adjacent), 180° (opposite)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Step 4 — Lone pairs reshape (but don't relabel) the geometry</h3>
+      <p>For a given steric number, swapping a bonded atom for a lone pair keeps the same
+      electron-domain geometry and hybridization, but changes the molecular geometry name and usually
+      compresses the angle slightly, since lone pairs are "fatter" (held closer to the nucleus, less
+      shielded) and repel more strongly than bonding pairs:</p>
+      <table class="rulesTable">
+        <thead><tr><th>Steric #</th><th>Lone pairs</th><th>Molecular geometry</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td>3</td><td>0</td><td>Trigonal planar</td><td>BF₃</td></tr>
+          <tr><td>3</td><td>1</td><td>Bent</td><td>SO₂</td></tr>
+          <tr><td>4</td><td>0</td><td>Tetrahedral</td><td>CH₄</td></tr>
+          <tr><td>4</td><td>1</td><td>Trigonal pyramidal</td><td>NH₃</td></tr>
+          <tr><td>4</td><td>2</td><td>Bent</td><td>H₂O</td></tr>
+          <tr><td>5</td><td>1</td><td>Seesaw</td><td>SF₄</td></tr>
+          <tr><td>5</td><td>2</td><td>T-shaped</td><td>ClF₃</td></tr>
+          <tr><td>5</td><td>3</td><td>Linear</td><td>XeF₂</td></tr>
+          <tr><td>6</td><td>1</td><td>Square pyramidal</td><td>BrF₅</td></tr>
+          <tr><td>6</td><td>2</td><td>Square planar</td><td>XeF₄</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Step 5 — How lone pairs are counted from a Lewis structure</h3>
+      <p>This tool estimates lone pairs from each atom's valence electrons and how many of those
+      electrons are tied up in bonds:</p>
+      <p class="formula-block">Lone pairs = (valence electrons − total bond order) / 2</p>
+      <p>where "total bond order" sums 1 for each single bond, 2 for each double bond, and 3 for each
+      triple bond the atom participates in. The result, combined with the number of attached atoms,
+      gives the steric number used in the table above.</p>
+
+      <h3>Caveats</h3>
+      <p>VSEPR predicts <em>idealized</em> angles. Real molecules often deviate by a few degrees because
+      lone pairs repel more than bonding pairs, multiple bonds repel more than single bonds, and
+      electronegativity differences pull electron density unevenly. VSEPR also doesn't handle
+      transition-metal coordination complexes, extensively delocalized π-systems, or radicals well —
+      treat the output here as a solid first approximation, not a substitute for computational chemistry
+      or experimental data.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 3: ADD TO LIBRARY ===================== -->
+<div class="tabPanel" id="tab-contribute" style="display:none;">
+  <div class="card">
+    <h2 class="panelTitle">Contribute a compound</h2>
+    <p class="note" style="margin-top:0;">
+      Add a compound's name, formula, and SMILES string here. It gets saved to the shared library on
+      this server, so anyone who opens this app (and is connected to the same running instance) can
+      type the same formula and immediately get your structure — including as a labeled option when
+      a formula matches more than one known compound (isomers).
+    </p>
+
+    <div class="formGrid">
+      <label>Compound name
+        <input id="newName" type="text" placeholder="e.g. Isopropanol">
+      </label>
+      <label>Chemical formula
+        <input id="newFormula" type="text" placeholder="e.g. C3H8O">
+      </label>
+      <label>SMILES string
+        <input id="newSmiles" type="text" placeholder="e.g. CC(O)C">
+      </label>
+    </div>
+    <button onclick="submitContribution()">Add to library</button>
+    <div id="contribMsg" class="note"></div>
+
+    <p class="note">
+      Don't know SMILES? It's a compact way to write structure as text: atoms are element symbols
+      (C, O, N, Cl...), bonds default to single, <code>=</code> means double, <code>#</code> means
+      triple, parentheses mark branches, and matching digits mark ring closures (e.g.
+      <code>c1ccccc1</code> for benzene). The formula you enter must match the atoms implied by your
+      SMILES (including implicit hydrogens), or the submission will be rejected — this keeps the
+      library self-consistent.
+    </p>
+
+    <h2 class="panelTitle" style="margin-top:22px;">Current shared library</h2>
+    <div class="tableWrap" style="max-height:260px;">
+      <table id="contribTable">
+        <thead><tr><th>Name</th><th>Formula</th><th>SMILES</th><th>Source</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+run = "node server.js"
+entrypoint = "server.js"
+language = "nodejs"
+
+[nix]
+channel = "stable-23_11"
+
+[deployment]
+run = ["sh", "-c", "node server.js"]
+
+[[ports]]
+localPort = 8080
+externalPort = 80

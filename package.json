@@ -1,0 +1,12 @@
+{
+  "name": "formula-structure-explorer",
+  "version": "1.0.0",
+  "description": "Chemical formula -> structure, hybridization, and bond angle explorer with a shared, community-contributed compound library.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
