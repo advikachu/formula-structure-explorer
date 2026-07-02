@@ -14,11 +14,36 @@
         and compute per-atom hybridization / lone pairs / angles.
 ================================================================= */
 
-const ELEMENTS_2 = ["Cl","Br"]; // 2-letter elements we support in SMILES output
-const VALENCE_ELECTRONS = { H:1, B:3, C:4, N:5, O:6, F:7, P:5, S:6, Cl:7, Br:7, I:7 };
-const TYPICAL_VALENCE   = { H:1, B:3, C:4, N:3, O:2, F:1, P:3, S:2, Cl:1, Br:1, I:1 };
-const COLORS = { C:"#5cc8ff", O:"#ff7a7a", N:"#7a9bff", S:"#ffd166", P:"#e7a9ff",
-                  F:"#9fe6ff", Cl:"#9fe6ff", Br:"#9fe6ff", I:"#9fe6ff", H:"#e7ebf2", B:"#ffb070" };
+// 2-letter elements must be matched before 1-letter ones (e.g. "Na" before "N").
+const SMILES_ELEMENTS_2 = ["Cl","Br","Li","Na","Mg","Al","Si","Ca","As","Se","Xe",
+                            "Fe","Cu","Zn","Ag","Mn","Ni","Co","Cr","Ti","Sn","Pb","Hg","Au","Pt","Pd"];
+const SMILES_ELEMENTS_1 = ["B","C","N","O","P","S","F","I","K"];
+const KNOWN_ELEMENTS = [...SMILES_ELEMENTS_2, ...SMILES_ELEMENTS_1];
+
+// For transition/post-transition metals, VALENCE_ELECTRONS is set equal to
+// TYPICAL_VALENCE (rather than their real d-block electron count) so the
+// existing lone-pair formula collapses to 0 lone pairs / steric = bond count —
+// a deliberate simplification, not a model of real coordination chemistry
+// (VSEPR is already documented as approximate for transition metals).
+const VALENCE_ELECTRONS = {
+  H:1, B:3, C:4, N:5, O:6, F:7, P:5, S:6, Cl:7, Br:7, I:7,
+  Li:1, Na:1, K:1, Mg:2, Ca:2, Al:3, Si:4, As:5, Se:6, Xe:8,
+  Fe:3, Cu:2, Zn:2, Ag:1, Mn:2, Ni:2, Co:2, Cr:3, Ti:4, Sn:4, Pb:2, Hg:2, Au:3, Pt:2, Pd:2
+};
+const TYPICAL_VALENCE = {
+  H:1, B:3, C:4, N:3, O:2, F:1, P:3, S:2, Cl:1, Br:1, I:1,
+  Li:1, Na:1, K:1, Mg:2, Ca:2, Al:3, Si:4, As:3, Se:2, Xe:0,
+  Fe:3, Cu:2, Zn:2, Ag:1, Mn:2, Ni:2, Co:2, Cr:3, Ti:4, Sn:4, Pb:2, Hg:2, Au:3, Pt:2, Pd:2
+};
+const COLORS = {
+  C:"#5cc8ff", O:"#ff7a7a", N:"#7a9bff", S:"#ffd166", P:"#e7a9ff",
+  F:"#9fe6ff", Cl:"#9fe6ff", Br:"#9fe6ff", I:"#9fe6ff", H:"#e7ebf2", B:"#ffb070",
+  Li:"#ffab91", Na:"#ce93d8", K:"#b39ddb", Mg:"#a5d6a7", Ca:"#81c995", Al:"#cfd8dc",
+  Si:"#d7ccc8", As:"#c5cae9", Se:"#ffe082", Xe:"#ea80fc",
+  Fe:"#ffb74d", Cu:"#ff8a65", Zn:"#90a4ae", Ag:"#e0e0e0", Mn:"#ab47bc", Ni:"#80cbc4",
+  Co:"#64b5f6", Cr:"#4db6ac", Ti:"#b0bec5", Sn:"#bcaaa4", Pb:"#78909c", Hg:"#c6a4d4",
+  Au:"#ffd54f", Pt:"#eceff1", Pd:"#b2dfdb"
+};
 
 /* ---------------------------------------------------------------
    1. FORMULA PARSER
@@ -278,83 +303,231 @@ function tryChainHeuristic(counts){
 
 /* ---------------------------------------------------------------
    4. MINI SMILES PARSER (for library entries)
+
+   Two stages: tokenizeSmiles() turns the raw string into a flat list
+   of typed tokens (throwing on anything that isn't valid SMILES
+   syntax), then buildMoleculeFromTokens() walks that token list into
+   an {atoms, bonds} graph (throwing on invalid *sequencing*, e.g.
+   unmatched branches or dangling ring closures). Every place the
+   parser used to silently default to a wrong atom or drop a
+   character now throws a specific SmilesParseError instead.
+
+   Stereo (@, @@, /, \) and isotopes are parsed so they can't corrupt
+   the surrounding element/H-count/charge extraction, then discarded —
+   nothing downstream models 3D geometry or isotopic mass, so there's
+   nothing to attach that data to.
 --------------------------------------------------------------- */
-const SMILES_ELEMENTS = ["Cl","Br","B","C","N","O","P","S","F","I"];
+const SMILES_AROMATIC = "bcnops"; // aromatic lowercase organic-subset atoms
 
-function parseSmiles(smiles){
-  let i = 0;
-  const atoms = [];
-  const bonds = [];
-  const ringMap = {};
-  const stack = [];
-  let prev = -1;
-  let pendingBondOrder = 1;
-  let pendingAromaticBond = false;
-
-  function addAtom(el, aromatic){
-    atoms.push({ element: el, aromatic: !!aromatic, charge:0 });
-    const idx = atoms.length - 1;
-    if (prev !== -1){
-      bonds.push({ a: prev, b: idx, order: pendingBondOrder, aromatic: pendingAromaticBond });
-    }
-    pendingBondOrder = 1; pendingAromaticBond = false;
-    prev = idx;
-    return idx;
+class SmilesParseError extends Error {
+  constructor(message, pos, smiles){
+    super(`${message} (position ${pos} in "${smiles}")`);
+    this.name = 'SmilesParseError';
+    this.pos = pos;
   }
+}
 
-  while(i < smiles.length){
+function tokenizeSmiles(smiles){
+  const tokens = [];
+  let i = 0;
+  while (i < smiles.length){
     const c = smiles[i];
-    if (c === '('){ stack.push(prev); i++; continue; }
-    if (c === ')'){ prev = stack.pop(); i++; continue; }
-    if (c === '-'){ pendingBondOrder = 1; i++; continue; }
-    if (c === '='){ pendingBondOrder = 2; i++; continue; }
-    if (c === '#'){ pendingBondOrder = 3; i++; continue; }
-    if (c === ':'){ pendingAromaticBond = true; i++; continue; }
-    if (c === '/' || c === '\\'){ i++; continue; }
+    if (c === '('){ tokens.push({ type:'open', pos:i }); i++; continue; }
+    if (c === ')'){ tokens.push({ type:'close', pos:i }); i++; continue; }
+    if (c === '.'){ tokens.push({ type:'dot', pos:i }); i++; continue; }
+    if (c === '-'){ tokens.push({ type:'bond', order:1, aromatic:false, pos:i }); i++; continue; }
+    if (c === '='){ tokens.push({ type:'bond', order:2, aromatic:false, pos:i }); i++; continue; }
+    if (c === '#'){ tokens.push({ type:'bond', order:3, aromatic:false, pos:i }); i++; continue; }
+    if (c === ':'){ tokens.push({ type:'bond', order:1, aromatic:true, pos:i }); i++; continue; }
+    if (c === '/' || c === '\\'){ tokens.push({ type:'bondDir', pos:i }); i++; continue; }
 
-    if (c >= '0' && c <= '9'){
-      const num = c;
-      if (ringMap[num] === undefined){ ringMap[num] = prev; }
-      else {
-        const partner = ringMap[num];
-        bonds.push({ a: partner, b: prev, order: pendingBondOrder, aromatic: pendingAromaticBond });
-        pendingBondOrder = 1; pendingAromaticBond = false;
-        delete ringMap[num];
-      }
-      i++; continue;
+    if (c === '%'){
+      const digits = smiles.substr(i+1, 2);
+      if (!/^\d{2}$/.test(digits)) throw new SmilesParseError(`Expected two digits after '%'`, i, smiles);
+      tokens.push({ type:'ring', label: digits, pos:i });
+      i += 3; continue;
     }
+    if (c >= '0' && c <= '9'){ tokens.push({ type:'ring', label:c, pos:i }); i++; continue; }
 
     if (c === '['){
-      let j = i+1, buf = "";
-      while (smiles[j] !== ']' && j < smiles.length){ buf += smiles[j]; j++; }
-      i = j+1;
-      const m = buf.match(/^([A-Za-z][a-z]?)(H(\d*))?([+-]\d*)?/);
-      let el = m ? m[1] : "C";
-      let aromatic = false;
-      if (el.length>0 && el[0] === el[0].toLowerCase()){
-        aromatic = true; el = el[0].toUpperCase() + el.slice(1);
-      }
-      const idx = addAtom(el, aromatic);
-      let hCount = 0;
-      if (m && m[2]) hCount = m[3] ? parseInt(m[3]) : 1;
-      atoms[idx]._explicitH = hCount;
-      if (m && m[4]){
-        const chargeStr = m[4];
-        atoms[idx].charge = chargeStr === '+' ? 1 : chargeStr === '-' ? -1 : parseInt(chargeStr);
-      }
-      continue;
+      const close = smiles.indexOf(']', i+1);
+      if (close === -1) throw new SmilesParseError(`Unclosed '[' bracket atom`, i, smiles);
+      tokens.push({ type:'bracketAtom', body: smiles.slice(i+1, close), pos:i });
+      i = close + 1; continue;
     }
 
-    let matched = null;
-    for (const el of SMILES_ELEMENTS){
-      if (smiles.substr(i, el.length) === el){ matched = el; break; }
-    }
-    if (matched){ addAtom(matched, false); i += matched.length; continue; }
-    if ("bcnops".includes(c)){ addAtom(c.toUpperCase(), true); i++; continue; }
-    if (c === '*'){ addAtom('C', false); i++; continue; }
-    i++;
+    if (c === '*'){ tokens.push({ type:'atom', element:'C', aromatic:false, pos:i }); i++; continue; }
+
+    const two = smiles.substr(i, 2);
+    if (SMILES_ELEMENTS_2.includes(two)){ tokens.push({ type:'atom', element:two, aromatic:false, pos:i }); i += 2; continue; }
+    if (SMILES_ELEMENTS_1.includes(c)){ tokens.push({ type:'atom', element:c, aromatic:false, pos:i }); i++; continue; }
+    if (SMILES_AROMATIC.includes(c)){ tokens.push({ type:'atom', element:c.toUpperCase(), aromatic:true, pos:i }); i++; continue; }
+
+    throw new SmilesParseError(`Unrecognized character '${c}'`, i, smiles);
   }
+  return tokens;
+}
+
+// Bracket-atom grammar (SMILES spec order): isotope? symbol chirality? hcount? charge? (':' class)?
+function parseBracketAtom(body, pos, smiles){
+  let p = 0;
+  const fail = (msg) => { throw new SmilesParseError(`Bad bracket atom '[${body}]': ${msg}`, pos, smiles); };
+
+  // 1. Isotope — leading digits, parsed and discarded (no downstream consumer)
+  const isoMatch = body.slice(p).match(/^\d+/);
+  if (isoMatch) p += isoMatch[0].length;
+
+  // 2. Symbol
+  let element = null, aromatic = false;
+  if (body[p] === '*'){ element = 'C'; p += 1; }
+  else {
+    const two = body.substr(p, 2);
+    if (KNOWN_ELEMENTS.includes(two)){ element = two; p += 2; }
+    else if (/[A-Z]/.test(body[p] || '')){
+      const one = body[p];
+      if (!KNOWN_ELEMENTS.includes(one)) fail(`unknown element symbol '${one}'`);
+      element = one; p += 1;
+    }
+    else if (body[p] && SMILES_AROMATIC.includes(body[p])){
+      element = body[p].toUpperCase(); aromatic = true; p += 1;
+    }
+    else fail(`expected an element symbol, got '${body[p] ?? '(end)'}'`);
+  }
+
+  // 3. Chirality — parsed and kept on the atom, but nothing downstream reads it
+  let chirality = null;
+  if (body[p] === '@'){
+    if (body[p+1] === '@'){ chirality = '@@'; p += 2; }
+    else { chirality = '@'; p += 1; }
+  }
+
+  // 4. H-count
+  let hCount = 0;
+  if (body[p] === 'H'){
+    p += 1;
+    const digits = body.slice(p).match(/^\d+/);
+    if (digits){ hCount = parseInt(digits[0], 10); p += digits[0].length; }
+    else hCount = 1;
+  }
+
+  // 5. Charge — repeated sign (++, --) or sign+digits (+2) or bare sign
+  let charge = 0;
+  if (body[p] === '+' || body[p] === '-'){
+    const sign = body[p] === '+' ? 1 : -1;
+    let q = p + 1;
+    if (body[q] === body[p]){
+      let count = 1;
+      while (body[q] === body[p]){ count++; q++; }
+      charge = sign * count; p = q;
+    } else {
+      const digits = body.slice(q).match(/^\d+/);
+      if (digits){ charge = sign * parseInt(digits[0], 10); p = q + digits[0].length; }
+      else { charge = sign; p = q; }
+    }
+  }
+
+  // 6. Atom class — ':' + digits, parsed and discarded
+  if (body[p] === ':'){
+    p += 1;
+    const digits = body.slice(p).match(/^\d+/);
+    if (!digits) fail(`expected digits after ':' for atom class`);
+    p += digits[0].length;
+  }
+
+  if (p !== body.length) fail(`unexpected trailing content '${body.slice(p)}'`);
+
+  return { element, aromatic, charge, chirality, _explicitH: hCount };
+}
+
+function buildMoleculeFromTokens(tokens, smiles){
+  const atoms = [], bonds = [];
+  const ringMap = {}; // label -> { atomIdx, bond }
+  const branchStack = [];
+  let prev = -1;
+  let pendingBond = { order:1, aromatic:false };
+  let atomSeen = false;
+
+  // A bond with no explicit symbol (order:1, aromatic:false — the default)
+  // between two aromatic atoms is an implicit aromatic bond per SMILES
+  // convention (e.g. every ring bond in "c1ccccc1" — nobody writes the
+  // explicit ':' symbol in practice), so it should be treated as order 1.5
+  // for valence/hydrogen purposes, not as a plain single bond.
+  function isDefaultBond(bond){ return bond.order === 1 && !bond.aromatic; }
+
+  function addAtom(atomSpec){
+    atoms.push(atomSpec);
+    const idx = atoms.length - 1;
+    if (prev !== -1){
+      const inferAromatic = isDefaultBond(pendingBond) && atoms[prev].aromatic && atomSpec.aromatic;
+      bonds.push({ a: prev, b: idx, order: pendingBond.order, aromatic: pendingBond.aromatic || inferAromatic });
+    }
+    pendingBond = { order:1, aromatic:false };
+    prev = idx;
+    atomSeen = true;
+  }
+
+  function handleRingToken(tok){
+    if (prev === -1) throw new SmilesParseError(`Ring bond digit with no preceding atom`, tok.pos, smiles);
+    const label = tok.label;
+    if (ringMap[label] === undefined){
+      ringMap[label] = { atomIdx: prev, bond: pendingBond };
+      pendingBond = { order:1, aromatic:false };
+    } else {
+      const opener = ringMap[label];
+      if (opener.atomIdx === prev) throw new SmilesParseError(`Ring bond '${label}' cannot close on the same atom that opened it`, tok.pos, smiles);
+      const order = pendingBond.order !== 1 ? pendingBond.order : opener.bond.order;
+      const inferAromatic = isDefaultBond(pendingBond) && isDefaultBond(opener.bond) &&
+        atoms[opener.atomIdx].aromatic && atoms[prev].aromatic;
+      const aromatic = pendingBond.aromatic || opener.bond.aromatic || inferAromatic;
+      bonds.push({ a: opener.atomIdx, b: prev, order, aromatic });
+      pendingBond = { order:1, aromatic:false };
+      delete ringMap[label];
+    }
+  }
+
+  tokens.forEach(tok => {
+    switch (tok.type){
+      case 'open':
+        if (prev === -1) throw new SmilesParseError(`'(' with no preceding atom to branch from`, tok.pos, smiles);
+        branchStack.push(prev);
+        break;
+      case 'close':
+        if (branchStack.length === 0) throw new SmilesParseError(`Unmatched ')' — no open branch to close`, tok.pos, smiles);
+        prev = branchStack.pop();
+        break;
+      case 'dot':
+        prev = -1; // start a new disconnected fragment (e.g. ionic salts)
+        break;
+      case 'bond':
+        pendingBond = { order: tok.order, aromatic: tok.aromatic };
+        break;
+      case 'bondDir':
+        break; // parsed so it isn't misread as something else, then discarded
+      case 'ring':
+        handleRingToken(tok);
+        break;
+      case 'atom':
+        addAtom({ element: tok.element, aromatic: tok.aromatic, charge: 0 });
+        break;
+      case 'bracketAtom':
+        addAtom(parseBracketAtom(tok.body, tok.pos, smiles));
+        break;
+    }
+  });
+
+  if (branchStack.length > 0) throw new SmilesParseError(`Unclosed '(' — missing ')'`, smiles.length, smiles);
+  const danglingRing = Object.keys(ringMap)[0];
+  if (danglingRing !== undefined) throw new SmilesParseError(`Ring bond label '${danglingRing}' was never closed`, smiles.length, smiles);
+  if (!atomSeen) throw new SmilesParseError(`No atoms found in SMILES string`, 0, smiles);
+
   return { atoms, bonds };
+}
+
+function parseSmiles(smiles){
+  if (typeof smiles !== 'string' || smiles.trim() === ''){
+    throw new SmilesParseError('SMILES string is empty', 0, smiles || '');
+  }
+  return buildMoleculeFromTokens(tokenizeSmiles(smiles), smiles);
 }
 
 /* ---------------------------------------------------------------
