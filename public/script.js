@@ -1233,6 +1233,10 @@ PRESETS.forEach(([name, formula])=>{
   presetsDiv.appendChild(btn);
 });
 
+document.getElementById('formula').addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') run();
+});
+
 /* ---------------------------------------------------------------
    11. TAB SWITCHING
 --------------------------------------------------------------- */
