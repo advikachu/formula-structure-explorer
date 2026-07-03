@@ -1143,7 +1143,9 @@ function layout3D(mol){
       const rotate = rotationAligning(template[0], backToParent);
       const rotatedTemplate = template.map(rotate);
 
-      let slot = 1; // slot 0 is reserved for the bond back to the parent
+      // Slot 0 is reserved for the bond back to the parent — except for the
+      // root atom, which has no parent bond and so gets every slot free.
+      let slot = parent === -1 ? 0 : 1;
       neighbours[idx].forEach(n => {
         if (n === parent || visited[n]) return; // already placed (ring closure) - just a bond, no new position
         const dir = rotatedTemplate[slot] || rotatedTemplate[rotatedTemplate.length-1] || [0,0,1];
