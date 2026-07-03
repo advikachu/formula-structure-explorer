@@ -1244,8 +1244,102 @@ PRESETS.forEach(([name, formula])=>{
   presetsDiv.appendChild(btn);
 });
 
+/* ---------------------------------------------------------------
+   12. FORMULA SEARCH / AUTOCOMPLETE
+   Suggests compounds by name or formula from the built-in + shared
+   library (including anything cached from a PubChem lookup) as the
+   user types, so they don't need to already know the exact formula.
+--------------------------------------------------------------- */
+function allCompounds(){
+  return [...LIBRARY, ...USER_LIBRARY];
+}
+
+let suggestionItems = [];
+let activeSuggestionIndex = -1;
+
+function updateSuggestions(){
+  const box = document.getElementById('suggestions');
+  const query = document.getElementById('formula').value.trim().toLowerCase();
+  activeSuggestionIndex = -1;
+
+  if (!query){ hideSuggestions(); return; }
+
+  const seen = new Set();
+  suggestionItems = allCompounds()
+    .filter(e => e.name.toLowerCase().includes(query) || e.formula.toLowerCase().includes(query))
+    .filter(e => {
+      const key = e.name + '|' + e.canon;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    })
+    .slice(0, 8);
+
+  if (suggestionItems.length === 0){ hideSuggestions(); return; }
+
+  box.innerHTML = suggestionItems.map((e, i) => `
+    <div class="suggestion-item" data-idx="${i}">
+      <span class="sName">${e.name}</span>
+      <span><span class="sFormula">${e.formula}</span><span class="sSource">${e.source==='pubchem'?'🌐':e.source==='community'?'🧪':''}</span></span>
+    </div>`
+  ).join('');
+  box.classList.add('open');
+
+  box.querySelectorAll('.suggestion-item').forEach(el => {
+    el.addEventListener('mousedown', (ev) => {
+      ev.preventDefault(); // keep input focused so the click isn't lost to a blur-close race
+      selectSuggestion(suggestionItems[parseInt(el.dataset.idx)]);
+    });
+  });
+}
+
+function selectSuggestion(entry){
+  document.getElementById('formula').value = entry.formula;
+  hideSuggestions();
+  document.getElementById('err').textContent = '';
+  showSingleMatch(entry, `Selected ${entry.name} (${entry.canon}).`);
+}
+
+function hideSuggestions(){
+  const box = document.getElementById('suggestions');
+  box.classList.remove('open');
+  box.innerHTML = '';
+  suggestionItems = [];
+  activeSuggestionIndex = -1;
+}
+
+function highlightSuggestion(idx){
+  document.querySelectorAll('#suggestions .suggestion-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`#suggestions .suggestion-item[data-idx="${idx}"]`);
+  if (el){ el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
+}
+
+document.getElementById('formula').addEventListener('input', updateSuggestions);
+
 document.getElementById('formula').addEventListener('keydown', (e)=>{
-  if (e.key === 'Enter') run();
+  if (suggestionItems.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')){
+    e.preventDefault();
+    activeSuggestionIndex = e.key === 'ArrowDown'
+      ? Math.min(activeSuggestionIndex + 1, suggestionItems.length - 1)
+      : Math.max(activeSuggestionIndex - 1, 0);
+    highlightSuggestion(activeSuggestionIndex);
+    return;
+  }
+  if (e.key === 'Escape'){ hideSuggestions(); return; }
+  if (e.key === 'Enter'){
+    if (activeSuggestionIndex >= 0 && suggestionItems[activeSuggestionIndex]){
+      e.preventDefault();
+      selectSuggestion(suggestionItems[activeSuggestionIndex]);
+      return;
+    }
+    hideSuggestions();
+    run();
+  }
+});
+
+document.addEventListener('click', (e)=>{
+  if (e.target.id !== 'formula' && !document.getElementById('suggestions').contains(e.target)){
+    hideSuggestions();
+  }
 });
 
 /* ---------------------------------------------------------------

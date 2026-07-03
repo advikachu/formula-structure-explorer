@@ -24,7 +24,10 @@
 
     <div class="card">
       <div class="controls">
-        <input id="formula" type="text" value="H2O" placeholder="Enter a chemical formula, e.g. CO2, NH3, C6H6">
+        <div class="formulaWrap">
+          <input id="formula" type="text" value="H2O" placeholder="Enter a formula or search by name, e.g. CO2, Benzene, Glucose" autocomplete="off">
+          <div id="suggestions" class="suggestions"></div>
+        </div>
         <button onclick="run()">Analyze</button>
       </div>
       <div class="presets" id="presets"></div>
