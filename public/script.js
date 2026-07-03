@@ -1184,12 +1184,28 @@ function show3D(){
 
   const pos = layout3D(lastMol);
   const molBlock = buildMolBlock(lastMol, pos);
+  const elementColor = (atom) => COLORS[atom.elem] || '#888888';
 
   viewer3d = $3Dmol.createViewer(container, { backgroundColor: '#171a21' });
   viewer3d.addModel(molBlock, 'sdf');
-  viewer3d.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.28 } });
+  viewer3d.setStyle({}, {
+    stick: { radius: 0.14, colorfunc: elementColor },
+    sphere: { scale: 0.28, colorfunc: elementColor }
+  });
   viewer3d.zoomTo();
   viewer3d.render();
+
+  render3DKey(lastMol);
+}
+
+function render3DKey(mol){
+  const keyEl = document.getElementById('viewer3dKey');
+  const seen = new Set();
+  const elements = [];
+  mol.atoms.forEach(a => { if (!seen.has(a.element)){ seen.add(a.element); elements.push(a.element); } });
+  keyEl.innerHTML = elements.map(el =>
+    `<span><span class="dot" style="background:${COLORS[el] || '#888888'}"></span>${el}</span>`
+  ).join('');
 }
 
 function close3D(){

@@ -33,5 +33,33 @@
     "smiles": "C=CC=CC=C",
     "source": "pubchem",
     "addedAt": "2026-07-02T16:27:28.486Z"
+  },
+  {
+    "name": "5-methyl-2-propan-2-ylphenol",
+    "formula": "C10H14O",
+    "smiles": "CC1=CC(=C(C=C1)C(C)C)O",
+    "source": "pubchem",
+    "addedAt": "2026-07-02T16:39:01.793Z"
+  },
+  {
+    "name": "4-tert-butylphenol",
+    "formula": "C10H14O",
+    "smiles": "CC(C)(C)C1=CC=C(C=C1)O",
+    "source": "pubchem",
+    "addedAt": "2026-07-02T16:39:01.795Z"
+  },
+  {
+    "name": "(5S)-2-methyl-5-prop-1-en-2-ylcyclohex-2-en-1-one",
+    "formula": "C10H14O",
+    "smiles": "CC1=CCC(CC1=O)C(=C)C",
+    "source": "pubchem",
+    "addedAt": "2026-07-02T16:39:01.796Z"
+  },
+  {
+    "name": "2-methyl-5-propan-2-ylphenol",
+    "formula": "C10H14O",
+    "smiles": "CC1=C(C=C(C=C1)C(C)C)O",
+    "source": "pubchem",
+    "addedAt": "2026-07-02T16:39:01.798Z"
   }
 ]
