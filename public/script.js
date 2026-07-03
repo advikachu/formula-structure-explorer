@@ -1175,6 +1175,11 @@ function buildMolBlock(mol, pos){
   return lines.join('\n');
 }
 
+// Created once and reused across opens (see show3D). Destroying and
+// recreating the WebGL context on every open/close cycle leaked contexts
+// and stale event listeners across compounds, which made later opens behave
+// inconsistently — reusing one viewer and resetting its model + camera each
+// time is the robust pattern instead.
 let viewer3d = null;
 
 function show3D(){
@@ -1182,19 +1187,26 @@ function show3D(){
   const overlay = document.getElementById('viewer3dOverlay');
   const container = document.getElementById('viewer3dContainer');
   overlay.style.display = 'flex';
-  container.innerHTML = '';
 
   const pos = layout3D(lastMol);
   const molBlock = buildMolBlock(lastMol, pos);
   const elementColor = (atom) => COLORS[atom.elem] || '#888888';
 
-  viewer3d = $3Dmol.createViewer(container, { backgroundColor: '#171a21' });
+  if (!viewer3d){
+    viewer3d = $3Dmol.createViewer(container, { backgroundColor: '#171a21' });
+  }
+  viewer3d.removeAllModels();
   viewer3d.addModel(molBlock, 'sdf');
   viewer3d.setStyle({}, {
     stick: { radius: 0.14, colorfunc: elementColor },
     sphere: { scale: 0.28, colorfunc: elementColor }
   });
   viewer3d.zoomTo();
+  // zoomTo() only resets pan/zoom, not rotation — force the camera's
+  // orientation (the quaternion component) back to identity too, so a
+  // leftover rotation from a previous open doesn't carry over.
+  const view = viewer3d.getView();
+  viewer3d.setView([view[0], view[1], view[2], view[3], 0, 0, 0, 1]);
   viewer3d.render();
 
   render3DKey(lastMol);
@@ -1212,7 +1224,6 @@ function render3DKey(mol){
 
 function close3D(){
   document.getElementById('viewer3dOverlay').style.display = 'none';
-  viewer3d = null;
 }
 
 /* ---------------------------------------------------------------
