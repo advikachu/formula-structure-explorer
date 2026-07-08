@@ -1093,6 +1093,7 @@ function vNormalize(v){
   return [v[0]/len, v[1]/len, v[2]/len];
 }
 function vAdd(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+function vSub(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
 function vScale(a,s){ return [a[0]*s, a[1]*s, a[2]*s]; }
 function vCross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
 function vDot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
@@ -1182,6 +1183,51 @@ function buildMolBlock(mol, pos){
 // time is the robust pattern instead.
 let viewer3d = null;
 
+// For each non-H atom with >=2 neighbours, find one label per unique ideal
+// VSEPR angle value (same dedup approach as the 2D arcs): the neighbour pair
+// whose actual 3D angle is closest to that ideal value gets one label,
+// placed along their bisector direction from the atom.
+function computeBondAngleLabels(mol, pos){
+  const { atoms, bonds } = mol;
+  const neighbours = atoms.map(() => []);
+  bonds.forEach(b => { neighbours[b.a].push(b.b); neighbours[b.b].push(b.a); });
+
+  const resultByIdx = {};
+  (lastResults || []).forEach(r => { resultByIdx[r.idx] = r; });
+
+  const labels = [];
+
+  atoms.forEach((atom, idx) => {
+    if (atom.element === 'H' || atom.isH) return;
+    const nb = neighbours[idx];
+    if (nb.length < 2) return;
+    const res = resultByIdx[idx];
+    if (!res || res.angles === '—') return;
+
+    const center = pos[idx];
+    const dirs = nb.map(n => vNormalize(vSub(pos[n], center)));
+    const uniqueAngles = [...new Set((res.angles.match(/([\d.]+)°/g) || []))];
+
+    uniqueAngles.forEach(angleLabel => {
+      const targetDeg = parseFloat(angleLabel);
+      let best = null, bestDiff = Infinity;
+      for (let i = 0; i < dirs.length; i++){
+        for (let j = i+1; j < dirs.length; j++){
+          const cosA = Math.max(-1, Math.min(1, vDot(dirs[i], dirs[j])));
+          const diff = Math.abs(Math.acos(cosA) * 180/Math.PI - targetDeg);
+          if (diff < bestDiff){ bestDiff = diff; best = [i, j]; }
+        }
+      }
+      if (best){
+        const bisector = vNormalize(vAdd(dirs[best[0]], dirs[best[1]]));
+        labels.push({ position: vAdd(center, vScale(bisector, 0.85)), text: angleLabel });
+      }
+    });
+  });
+
+  return labels;
+}
+
 function show3D(){
   if (!lastMol){ return; }
   const overlay = document.getElementById('viewer3dOverlay');
@@ -1196,11 +1242,23 @@ function show3D(){
     viewer3d = $3Dmol.createViewer(container, { backgroundColor: '#171a21' });
   }
   viewer3d.removeAllModels();
+  viewer3d.removeAllLabels();
   viewer3d.addModel(molBlock, 'sdf');
   viewer3d.setStyle({}, {
     stick: { radius: 0.14, colorfunc: elementColor },
     sphere: { scale: 0.28, colorfunc: elementColor }
   });
+
+  computeBondAngleLabels(lastMol, pos).forEach(l => {
+    viewer3d.addLabel(l.text, {
+      position: { x: l.position[0], y: l.position[1], z: l.position[2] },
+      fontColor: '#ffd166', fontSize: 12, font: 'sans-serif',
+      backgroundColor: '#171a21', backgroundOpacity: 0.75,
+      borderColor: '#ffd166', borderThickness: 0.5,
+      inFront: true, showBackground: true,
+    });
+  });
+
   viewer3d.zoomTo();
   // zoomTo() only resets pan/zoom, not rotation — force the camera's
   // orientation (the quaternion component) back to identity too, so a

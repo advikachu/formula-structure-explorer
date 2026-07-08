@@ -61,5 +61,40 @@
     "smiles": "CC1=C(C=C(C=C1)C(C)C)O",
     "source": "pubchem",
     "addedAt": "2026-07-02T16:39:01.798Z"
+  },
+  {
+    "name": "(C60-Ih)[5,6]fullerene",
+    "formula": "C60",
+    "smiles": "C12=C3C4=C5C6=C1C7=C8C9=C1C%10=C%11C(=C29)C3=C2C3=C4C4=C5C5=C9C6=C7C6=C7C8=C1C1=C8C%10=C%10C%11=C2C2=C3C3=C4C4=C5C5=C%11C%12=C(C6=C95)C7=C1C1=C%12C5=C%11C4=C3C3=C5C(=C81)C%10=C23",
+    "source": "pubchem",
+    "addedAt": "2026-07-03T01:16:57.226Z"
+  },
+  {
+    "name": "cyclohexacontatriacontayne",
+    "formula": "C60",
+    "smiles": "C1#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#CC#C1",
+    "source": "pubchem",
+    "addedAt": "2026-07-03T01:16:57.233Z"
+  },
+  {
+    "name": "2-(5-azidotetrazol-1-yl)-1,3-didiazoguanidine",
+    "formula": "C2N14",
+    "smiles": "C1(=NN=NN1N=C(N=[N+]=[N-])N=[N+]=[N-])N=[N+]=[N-]",
+    "source": "pubchem",
+    "addedAt": "2026-07-03T01:21:04.939Z"
+  },
+  {
+    "name": "2-(diazidomethylideneamino)-1,3-didiazoguanidine",
+    "formula": "C2N14",
+    "smiles": "C(=NN=C(N=[N+]=[N-])N=[N+]=[N-])(N=[N+]=[N-])N=[N+]=[N-]",
+    "source": "pubchem",
+    "addedAt": "2026-07-03T01:21:04.942Z"
+  },
+  {
+    "name": "5,6-bis(pentazol-1-yl)tetrazine",
+    "formula": "C2N14",
+    "smiles": "C1(=C(N=NN=N1)N2N=NN=N2)N3N=NN=N3",
+    "source": "pubchem",
+    "addedAt": "2026-07-03T01:21:04.950Z"
   }
 ]
