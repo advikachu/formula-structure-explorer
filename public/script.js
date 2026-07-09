@@ -1512,8 +1512,6 @@ const TUTORIAL_STEPS = [
     body: "The table on the right breaks down each atom's bonds, lone pairs, steric number, and hybridization. Below the diagram, the atom-by-atom explanation walks through <em>why</em> — the valence electron count, lone-pair formula, and VSEPR reasoning behind each result." },
   { title: "View in 3D",
     body: "Click <strong>View in 3D</strong> under the diagram for an interactive 3D model — drag to rotate, scroll to zoom." },
-  { title: "Not in the library?",
-    body: "If a formula isn't recognized locally, this tool automatically checks PubChem for the real structure, and caches the result so it's instant next time. If nothing is found anywhere, it falls back to VSEPR/valence-rule estimation rather than giving up." },
 ];
 
 let tutorialIndex = 0;
