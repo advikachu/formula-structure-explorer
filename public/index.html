@@ -8,7 +8,10 @@
 </head>
 <body>
 
-<h1>Chemical Formula → Structure, Hybridization &amp; Bond Angles</h1>
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+  <h1>Chemical Formula → Structure, Hybridization &amp; Bond Angles</h1>
+  <button class="secondary" onclick="startTutorial()">? Tutorial</button>
+</div>
 <div class="sub">Type a chemical formula (e.g. <code>H2O</code>, <code>CO2</code>, <code>C2H6O</code>, <code>NH3</code>, <code>C6H12O6</code>) to see an estimated structure, hybridization, and idealized bond angles.</div>
 
 <div class="tabs">
@@ -192,6 +195,20 @@
         <thead><tr><th>Name</th><th>Formula</th><th>SMILES</th><th>Source</th></tr></thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div id="tutorialOverlay" class="modalOverlay" style="display:none;">
+  <div class="modalBox" style="max-width:480px;">
+    <div class="modalHeader">
+      <span id="tutorialStepLabel">Step 1</span>
+      <button class="secondary" onclick="skipTutorial()">Skip</button>
+    </div>
+    <div id="tutorialBody"></div>
+    <div style="display:flex; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="tutorialBackBtn" onclick="tutorialBack()">Back</button>
+      <button id="tutorialNextBtn" onclick="tutorialNext()">Next</button>
     </div>
   </div>
 </div>

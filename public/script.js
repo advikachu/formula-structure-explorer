@@ -1496,7 +1496,69 @@ async function submitContribution(){
 }
 
 /* ---------------------------------------------------------------
+   12b. FIRST-VISIT TUTORIAL
+--------------------------------------------------------------- */
+const TUTORIAL_SEEN_KEY = 'structureExplorerTutorialSeen';
+
+const TUTORIAL_STEPS = [
+  { title: "Welcome!",
+    body: "This tool turns a chemical formula into a 2D structure diagram, a per-atom VSEPR analysis, and an interactive 3D model. This quick tour covers the main pieces — skip it any time with the button above." },
+  { title: "Type or search a formula",
+    body: "Enter a formula like <code>H2O</code> or <code>C6H12O6</code> in the box at the top, or just start typing a compound name — a dropdown will suggest matches. The preset buttons below it jump straight to common compounds." },
+  { title: "Read the diagram",
+    body: "Atoms are color-coded (see the legend under the diagram). The dashed yellow arcs show the <strong>idealized</strong> VSEPR bond angle for that atom (e.g. 109.5°) — not necessarily the literal angle as drawn, since the 2D layout isn't a precise geometric renderer." },
+  { title: "Per-atom analysis & explanation",
+    body: "The table on the right breaks down each atom's bonds, lone pairs, steric number, and hybridization. Below the diagram, the atom-by-atom explanation walks through <em>why</em> — the valence electron count, lone-pair formula, and VSEPR reasoning behind each result." },
+  { title: "View in 3D",
+    body: "Click <strong>View in 3D</strong> under the diagram for an interactive 3D model — drag to rotate, scroll to zoom — built from the same idealized VSEPR geometry, with the same angle labels." },
+  { title: "Not in the library?",
+    body: "If a formula isn't recognized locally, this tool automatically checks PubChem for the real structure, and caches the result so it's instant next time. If nothing is found anywhere, it falls back to VSEPR/valence-rule estimation rather than giving up." },
+  { title: "VSEPR Rules & Add to Library",
+    body: "The <strong>VSEPR Rules</strong> tab has the underlying theory if you want a refresher. The <strong>Add to Library</strong> tab lets you contribute a compound (name + formula + SMILES) that gets saved and shared with everyone using this instance." },
+];
+
+let tutorialIndex = 0;
+
+function renderTutorialStep(){
+  const step = TUTORIAL_STEPS[tutorialIndex];
+  document.getElementById('tutorialStepLabel').textContent = `Step ${tutorialIndex + 1} of ${TUTORIAL_STEPS.length}`;
+  document.getElementById('tutorialBody').innerHTML =
+    `<h3 style="margin:0 0 8px; color:var(--accent); font-size:15px;">${step.title}</h3>` +
+    `<p style="margin:0; font-size:13px; line-height:1.6; color:var(--text);">${step.body}</p>`;
+  document.getElementById('tutorialBackBtn').style.visibility = tutorialIndex === 0 ? 'hidden' : 'visible';
+  document.getElementById('tutorialNextBtn').textContent = tutorialIndex === TUTORIAL_STEPS.length - 1 ? 'Get started' : 'Next';
+}
+
+function startTutorial(){
+  tutorialIndex = 0;
+  document.getElementById('tutorialOverlay').style.display = 'flex';
+  renderTutorialStep();
+}
+
+function tutorialNext(){
+  if (tutorialIndex < TUTORIAL_STEPS.length - 1){ tutorialIndex++; renderTutorialStep(); }
+  else finishTutorial();
+}
+
+function tutorialBack(){
+  if (tutorialIndex > 0){ tutorialIndex--; renderTutorialStep(); }
+}
+
+function skipTutorial(){ finishTutorial(); }
+
+function finishTutorial(){
+  document.getElementById('tutorialOverlay').style.display = 'none';
+  try { localStorage.setItem(TUTORIAL_SEEN_KEY, 'true'); } catch(e){ /* private-mode/no localStorage - just won't be remembered */ }
+}
+
+/* ---------------------------------------------------------------
    13. INIT
 --------------------------------------------------------------- */
 loadUserLibrary();
 run();
+
+(function(){
+  let seen = false;
+  try { seen = localStorage.getItem(TUTORIAL_SEEN_KEY) === 'true'; } catch(e){ /* ignore */ }
+  if (!seen) startTutorial();
+})();
