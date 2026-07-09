@@ -1514,8 +1514,6 @@ const TUTORIAL_STEPS = [
     body: "Click <strong>View in 3D</strong> under the diagram for an interactive 3D model — drag to rotate, scroll to zoom — built from the same idealized VSEPR geometry, with the same angle labels." },
   { title: "Not in the library?",
     body: "If a formula isn't recognized locally, this tool automatically checks PubChem for the real structure, and caches the result so it's instant next time. If nothing is found anywhere, it falls back to VSEPR/valence-rule estimation rather than giving up." },
-  { title: "VSEPR Rules & Add to Library",
-    body: "The <strong>VSEPR Rules</strong> tab has the underlying theory if you want a refresher. The <strong>Add to Library</strong> tab lets you contribute a compound (name + formula + SMILES) that gets saved and shared with everyone using this instance." },
 ];
 
 let tutorialIndex = 0;
