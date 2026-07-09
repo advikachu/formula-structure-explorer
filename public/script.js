@@ -1496,10 +1496,11 @@ async function submitContribution(){
 }
 
 /* ---------------------------------------------------------------
-   12b. FIRST-VISIT TUTORIAL
+   12b. TUTORIAL
+   Opens automatically on every page load (not just the first visit)
+   since this is meant to run on a shared/class instance. Still
+   skippable, and reopenable any time via the "? Tutorial" button.
 --------------------------------------------------------------- */
-const TUTORIAL_SEEN_KEY = 'structureExplorerTutorialSeen';
-
 const TUTORIAL_STEPS = [
   { title: "Welcome!",
     body: "This tool turns a chemical formula into a 2D structure diagram, a per-atom VSEPR analysis, and an interactive 3D model. This quick tour covers the main pieces — skip it any time with the button above." },
@@ -1548,7 +1549,6 @@ function skipTutorial(){ finishTutorial(); }
 
 function finishTutorial(){
   document.getElementById('tutorialOverlay').style.display = 'none';
-  try { localStorage.setItem(TUTORIAL_SEEN_KEY, 'true'); } catch(e){ /* private-mode/no localStorage - just won't be remembered */ }
 }
 
 /* ---------------------------------------------------------------
@@ -1556,9 +1556,4 @@ function finishTutorial(){
 --------------------------------------------------------------- */
 loadUserLibrary();
 run();
-
-(function(){
-  let seen = false;
-  try { seen = localStorage.getItem(TUTORIAL_SEEN_KEY) === 'true'; } catch(e){ /* ignore */ }
-  if (!seen) startTutorial();
-})();
+startTutorial();
