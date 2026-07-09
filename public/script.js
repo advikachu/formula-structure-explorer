@@ -1507,11 +1507,11 @@ const TUTORIAL_STEPS = [
   { title: "Type or search a formula",
     body: "Enter a formula like <code>H2O</code> or <code>C6H12O6</code> in the box at the top, or just start typing a compound name — a dropdown will suggest matches. The preset buttons below it jump straight to common compounds." },
   { title: "Read the diagram",
-    body: "Atoms are color-coded (see the legend under the diagram). The dashed yellow arcs show the <strong>idealized</strong> VSEPR bond angle for that atom (e.g. 109.5°) — not necessarily the literal angle as drawn, since the 2D layout isn't a precise geometric renderer." },
+    body: "Atoms are color-coded (see the legend under the diagram). The dashed yellow arcs show the <strong>idealized</strong> VSEPR bond angle for that atom (e.g. 109.5°)." },
   { title: "Per-atom analysis & explanation",
     body: "The table on the right breaks down each atom's bonds, lone pairs, steric number, and hybridization. Below the diagram, the atom-by-atom explanation walks through <em>why</em> — the valence electron count, lone-pair formula, and VSEPR reasoning behind each result." },
   { title: "View in 3D",
-    body: "Click <strong>View in 3D</strong> under the diagram for an interactive 3D model — drag to rotate, scroll to zoom — built from the same idealized VSEPR geometry, with the same angle labels." },
+    body: "Click <strong>View in 3D</strong> under the diagram for an interactive 3D model — drag to rotate, scroll to zoom." },
   { title: "Not in the library?",
     body: "If a formula isn't recognized locally, this tool automatically checks PubChem for the real structure, and caches the result so it's instant next time. If nothing is found anywhere, it falls back to VSEPR/valence-rule estimation rather than giving up." },
 ];
